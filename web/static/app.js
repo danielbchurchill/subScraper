@@ -47,9 +47,11 @@ async function searchShow() {
     ]);
 
     state.title = titleRes.title;
-    state.episodes = epsRes;
+    state.episodes = epsRes.map(e => ({ ...e, season: Number(e.season), episode: Number(e.episode) }));
 
-    const seasonNums = [...new Set(epsRes.map(e => e.season))].sort((a, b) => a - b);
+    console.log('episodes raw sample:', epsRes[0]);
+    const seasonNums = [...new Set(state.episodes.map(e => e.season))].sort((a, b) => a - b);
+    console.log('season nums:', seasonNums);
     state.seasons = seasonNums;
     state.activeSeason = seasonNums[0] ?? 1;
 
