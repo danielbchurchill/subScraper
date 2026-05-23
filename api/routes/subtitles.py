@@ -10,7 +10,10 @@ from fastapi.responses import FileResponse
 from api.config import Settings, get_settings
 from api.models import EpisodeStatus, SubtitleStatus, TranslationJob
 from api.services import subdl as subdl_svc
+from api.services import jimaku as jimaku_svc
+from api.services import kitsunekko as kitsunekko_svc
 from api.services.opensubtitles import OpenSubtitlesClient
+from api.services import imdb as imdb_svc
 from api.services import translation as trans_svc
 
 log = logging.getLogger(__name__)
@@ -75,6 +78,12 @@ async def fetch_subtitles(
 ):
     ep_dir = _ep_dir(settings, series_imdb_id, season, episode)
 
+    # Fetch show title once — needed by Jimaku and Kitsunekko
+    try:
+        series_title = await imdb_svc.get_series_title(series_imdb_id)
+    except Exception:
+        series_title = ""
+
     # Login to OpenSubtitles once for this request
     os_client = OpenSubtitlesClient(settings)
     if settings.opensubtitles_username and settings.opensubtitles_api_key:
@@ -84,7 +93,7 @@ async def fetch_subtitles(
             log.warning("OpenSubtitles login failed: %s", e)
 
     # Try English first
-    en_result = await _search_language(settings, os_client, series_imdb_id, season, episode, "en", "EN")
+    en_result = await _search_language(settings, os_client, series_imdb_id, series_title, season, episode, "en", "EN")
     if en_result:
         srt = await _download_result(settings, os_client, en_result, ep_dir, "english.srt")
         if srt:
@@ -92,9 +101,11 @@ async def fetch_subtitles(
 
     # Try non-English fallbacks, queue for translation
     for lang_code, lang_code2 in [("ja", "JA"), ("zh", "ZH"), ("ko", "KO"), ("fr", "FR"), ("es", "ES")]:
-        result = await _search_language(settings, os_client, series_imdb_id, season, episode, lang_code, lang_code2)
+        result = await _search_language(settings, os_client, series_imdb_id, series_title, season, episode, lang_code, lang_code2)
         if result:
-            source_srt = await _download_result(settings, os_client, result, ep_dir, f"source_{lang_code}.srt")
+            ext = Path(result.name).suffix.lower() or ".srt"
+            source_filename = f"source_{lang_code}{ext}"
+            source_srt = await _download_result(settings, os_client, result, ep_dir, source_filename)
             if source_srt:
                 output_path = str(ep_dir / "translated.srt")
                 job = trans_svc.create_job(
@@ -116,20 +127,25 @@ async def _search_language(
     settings: Settings,
     os_client: OpenSubtitlesClient,
     series_imdb_id: str,
+    series_title: str,
     season: int,
     episode: int,
     lang: str,
     lang_upper: str,
 ) -> Optional[object]:
-    log.info("Searching %s S%02dE%02d lang=%s subdl_key=%s os_key=%s",
-             series_imdb_id, season, episode, lang,
-             bool(settings.subdl_api_key), bool(settings.opensubtitles_api_key))
+    log.info("Searching %s S%02dE%02d lang=%s", series_imdb_id, season, episode, lang)
+    sources = ["subdl", "opensubtitles", "jimaku"]
     tasks = [
         subdl_svc.search(settings, series_imdb_id, season, episode, language=lang_upper),
         os_client.search(series_imdb_id, season, episode, language=lang),
+        jimaku_svc.search(series_title, season, episode, language=lang),
     ]
+    if lang == "ja":
+        sources.append("kitsunekko")
+        tasks.append(kitsunekko_svc.search(series_title, season, episode))
+
     results_list = await asyncio.gather(*tasks, return_exceptions=True)
-    for source, results in zip(["subdl", "opensubtitles"], results_list):
+    for source, results in zip(sources, results_list):
         if isinstance(results, Exception):
             log.warning("%s search error: %s", source, results)
             continue
@@ -146,6 +162,10 @@ async def _download_result(settings, os_client: OpenSubtitlesClient, result, ep_
     try:
         if result.source == "subdl":
             downloaded = await subdl_svc.download(settings, result, ep_dir)
+        elif result.source == "jimaku":
+            downloaded = await jimaku_svc.download(result, ep_dir)
+        elif result.source == "kitsunekko":
+            downloaded = await kitsunekko_svc.download(result, ep_dir)
         else:
             downloaded = await os_client.download(result, ep_dir)
 
