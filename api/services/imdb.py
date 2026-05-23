@@ -1,73 +1,52 @@
 from __future__ import annotations
-import asyncio
-import importlib.util
-import pkgutil
-from functools import lru_cache
 from typing import Optional
 
-# cinemagoer uses pkgutil.find_loader which was removed in Python 3.14
-if not hasattr(pkgutil, "find_loader"):
-    pkgutil.find_loader = lambda name, path=None: importlib.util.find_spec(name)
+import httpx
 
 from api.models import Episode
 
-
-def _strip_tt(imdb_id: str) -> str:
-    return imdb_id.lstrip("t")
+TVMAZE = "https://api.tvmaze.com"
 
 
-@lru_cache(maxsize=32)
-def _fetch_episodes_sync(numeric_id: str) -> dict:
-    """Returns {season_num: {ep_num: {title, air_date, imdb_id}}}."""
-    from imdb import Cinemagoer
-
-    ia = Cinemagoer()
-    series = ia.get_movie(numeric_id)
-    ia.update(series, "episodes")
-    seasons: dict = {}
-    for season_num, eps in (series.get("episodes") or {}).items():
-        seasons[int(season_num)] = {}
-        for ep_num, ep in eps.items():
-            seasons[int(season_num)][int(ep_num)] = {
-                "title": ep.get("title", f"Episode {ep_num}"),
-                "air_date": ep.get("original air date", None),
-                "imdb_id": f"tt{ep.movieID}" if ep.movieID else "",
-            }
-    return seasons
-
-
-async def get_episodes(imdb_id: str, season: Optional[int] = None) -> list[Episode]:
-    """Fetch episode list for a series. Optionally filter to one season."""
-    numeric_id = _strip_tt(imdb_id)
-    loop = asyncio.get_event_loop()
-    seasons = await loop.run_in_executor(None, _fetch_episodes_sync, numeric_id)
-
-    episodes: list[Episode] = []
-    for s_num, eps in seasons.items():
-        if season is not None and s_num != season:
-            continue
-        for ep_num, meta in sorted(eps.items()):
-            episodes.append(
-                Episode(
-                    imdb_id=meta["imdb_id"],
-                    series_imdb_id=imdb_id if imdb_id.startswith("tt") else f"tt{imdb_id}",
-                    season=s_num,
-                    episode=ep_num,
-                    title=meta["title"],
-                    air_date=meta.get("air_date"),
-                )
-            )
-    return episodes
+async def _lookup_show(imdb_id: str) -> dict:
+    norm = imdb_id if imdb_id.startswith("tt") else f"tt{imdb_id}"
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(f"{TVMAZE}/lookup/shows", params={"imdb": norm})
+        r.raise_for_status()
+        return r.json()
 
 
 async def get_series_title(imdb_id: str) -> str:
-    numeric_id = _strip_tt(imdb_id)
+    show = await _lookup_show(imdb_id)
+    return show.get("name", imdb_id)
 
-    def _fetch():
-        from imdb import Cinemagoer
-        ia = Cinemagoer()
-        m = ia.get_movie(numeric_id)
-        return m.get("title", imdb_id)
 
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _fetch)
+async def get_episodes(imdb_id: str, season: Optional[int] = None) -> list[Episode]:
+    norm = imdb_id if imdb_id.startswith("tt") else f"tt{imdb_id}"
+    show = await _lookup_show(imdb_id)
+    show_id = show["id"]
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(f"{TVMAZE}/shows/{show_id}/episodes")
+        r.raise_for_status()
+        raw = r.json()
+
+    episodes: list[Episode] = []
+    for ep in raw:
+        s = ep.get("season")
+        e = ep.get("number")
+        if s is None or e is None:
+            continue
+        if season is not None and s != season:
+            continue
+        episodes.append(
+            Episode(
+                imdb_id="",
+                series_imdb_id=norm,
+                season=s,
+                episode=e,
+                title=ep.get("name") or f"Episode {e}",
+                air_date=ep.get("airdate"),
+            )
+        )
+    return episodes
