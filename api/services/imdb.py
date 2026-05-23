@@ -10,7 +10,7 @@ TVMAZE = "https://api.tvmaze.com"
 
 async def _lookup_show(imdb_id: str) -> dict:
     norm = imdb_id if imdb_id.startswith("tt") else f"tt{imdb_id}"
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
         r = await client.get(f"{TVMAZE}/lookup/shows", params={"imdb": norm})
         r.raise_for_status()
         return r.json()
