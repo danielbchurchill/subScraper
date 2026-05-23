@@ -45,6 +45,8 @@ async def search(
     results = []
     for r in data.get("results", []):
         url = r.get("url", "")
+        if not url:
+            continue  # skip pack entries with no direct download URL
         results.append(
             SubtitleResult(
                 source="subdl",

@@ -75,18 +75,26 @@ async def fetch_subtitles(
 ):
     ep_dir = _ep_dir(settings, series_imdb_id, season, episode)
 
+    # Login to OpenSubtitles once for this request
+    os_client = OpenSubtitlesClient(settings)
+    if settings.opensubtitles_username and settings.opensubtitles_api_key:
+        try:
+            await os_client.login()
+        except Exception as e:
+            log.warning("OpenSubtitles login failed: %s", e)
+
     # Try English first
-    en_result = await _search_language(settings, series_imdb_id, season, episode, "en", "EN")
+    en_result = await _search_language(settings, os_client, series_imdb_id, season, episode, "en", "EN")
     if en_result:
-        srt = await _download_result(settings, en_result, ep_dir, "english.srt")
+        srt = await _download_result(settings, os_client, en_result, ep_dir, "english.srt")
         if srt:
             return _episode_status(settings, series_imdb_id, season, episode)
 
     # Try non-English fallbacks, queue for translation
     for lang_code, lang_code2 in [("ja", "JA"), ("zh", "ZH"), ("ko", "KO"), ("fr", "FR"), ("es", "ES")]:
-        result = await _search_language(settings, series_imdb_id, season, episode, lang_code, lang_code2)
+        result = await _search_language(settings, os_client, series_imdb_id, season, episode, lang_code, lang_code2)
         if result:
-            source_srt = await _download_result(settings, result, ep_dir, f"source_{lang_code}.srt")
+            source_srt = await _download_result(settings, os_client, result, ep_dir, f"source_{lang_code}.srt")
             if source_srt:
                 output_path = str(ep_dir / "translated.srt")
                 job = trans_svc.create_job(
@@ -106,6 +114,7 @@ async def fetch_subtitles(
 
 async def _search_language(
     settings: Settings,
+    os_client: OpenSubtitlesClient,
     series_imdb_id: str,
     season: int,
     episode: int,
@@ -117,7 +126,7 @@ async def _search_language(
              bool(settings.subdl_api_key), bool(settings.opensubtitles_api_key))
     tasks = [
         subdl_svc.search(settings, series_imdb_id, season, episode, language=lang_upper),
-        _opensubtitles_search(settings, series_imdb_id, season, episode, lang),
+        os_client.search(series_imdb_id, season, episode, language=lang),
     ]
     results_list = await asyncio.gather(*tasks, return_exceptions=True)
     for source, results in zip(["subdl", "opensubtitles"], results_list):
@@ -130,27 +139,15 @@ async def _search_language(
     return None
 
 
-async def _opensubtitles_search(settings, series_imdb_id, season, episode, lang):
-    client = OpenSubtitlesClient(settings)
-    if settings.opensubtitles_username:
-        try:
-            await client.login()
-        except Exception:
-            pass
-    return await client.search(series_imdb_id, season, episode, language=lang)
 
-
-async def _download_result(settings, result, ep_dir: Path, filename: str) -> Optional[Path]:
+async def _download_result(settings, os_client: OpenSubtitlesClient, result, ep_dir: Path, filename: str) -> Optional[Path]:
     dest = ep_dir / filename
     ep_dir.mkdir(parents=True, exist_ok=True)
     try:
         if result.source == "subdl":
             downloaded = await subdl_svc.download(settings, result, ep_dir)
         else:
-            client = OpenSubtitlesClient(settings)
-            if settings.opensubtitles_username:
-                await client.login()
-            downloaded = await client.download(result, ep_dir)
+            downloaded = await os_client.download(result, ep_dir)
 
         if downloaded and downloaded.exists():
             downloaded.rename(dest)
