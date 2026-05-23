@@ -57,6 +57,7 @@ async function searchShow() {
     await loadStatuses();
     renderEpisodes();
   } catch (err) {
+    console.error('searchShow error:', err);
     setError('episode-grid', `Failed to load show: ${err.message}`);
   }
 }
