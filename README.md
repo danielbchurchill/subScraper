@@ -67,13 +67,21 @@ If you have less RAM, try `qwen2.5:3b` (~2 GB).
 ```bash
 # In one terminal — keep this running while you translate
 ollama serve
-
-# In another terminal
-source .venv/bin/activate
-python run.py
 ```
 
-Open **[http://localhost:8000](http://localhost:8000)** in your browser.
+**macOS / Linux** — in a second terminal:
+```bash
+./start.sh
+```
+
+**Windows** — double-click `start.bat`, or in a terminal:
+```bat
+start.bat
+```
+
+The scripts create the virtual environment and install dependencies automatically on first run. Open **[http://localhost:8000](http://localhost:8000)** in your browser.
+
+> If you prefer to manage the venv yourself: `source .venv/bin/activate` then `python run.py`.
 
 ---
 
