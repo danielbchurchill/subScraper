@@ -1,0 +1,30 @@
+# Environment & secrets
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Data (user-generated, not tracked)
+data/subtitles/*
+data/jobs/*
+!data/subtitles/.gitkeep
+!data/jobs/.gitkeep
+
+# llm-subtrans project files
+*.subtrans
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SubScraper</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<header>
+  <h1>SubScraper</h1>
+  <nav>
+    <button data-tab="show" class="active">Show</button>
+    <button data-tab="jobs">Jobs</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- Show tab -->
+  <div id="tab-show" class="tab-panel active">
+    <div class="search-row">
+      <input type="text" id="imdb-input" placeholder="IMDB ID  (e.g. tt7126948)" />
+      <button class="btn" id="search-btn">Load Show</button>
+    </div>
+
+    <div id="show-header"></div>
+
+    <div id="episode-area">
+      <div id="episode-grid" class="episode-grid">
+        <div class="empty-state">Enter an IMDB ID above to get started.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Jobs tab -->
+  <div id="tab-jobs" class="tab-panel">
+    <div class="section-title">Translation Jobs</div>
+    <div id="job-list" class="job-list">
+      <div class="empty-state">No translation jobs yet.</div>
+    </div>
+  </div>
+
+  <!-- Settings tab -->
+  <div id="tab-settings" class="tab-panel">
+
+    <div class="section-title">API Keys</div>
+    <div class="settings-grid" style="margin-bottom:40px">
+
+      <div class="setting-group">
+        <label>SubDL API Key <a href="https://subdl.com/api-doc" target="_blank" class="help-link">Get key →</a></label>
+        <div class="key-row">
+          <input type="password" id="subdl-key" placeholder="Paste key…" autocomplete="off" />
+          <span id="subdl-badge" class="badge badge-missing">Not set</span>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label>OpenSubtitles API Key <a href="https://www.opensubtitles.com/consumers" target="_blank" class="help-link">Get key →</a></label>
+        <div class="key-row">
+          <input type="password" id="os-key" placeholder="Paste key…" autocomplete="off" />
+          <span id="os-badge" class="badge badge-missing">Not set</span>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label>OpenSubtitles Username</label>
+        <input type="text" id="os-username" placeholder="your username" autocomplete="off" />
+      </div>
+
+      <div class="setting-group">
+        <label>OpenSubtitles Password</label>
+        <input type="password" id="os-password" placeholder="your password" autocomplete="off" />
+        <div style="font-size:12px;color:var(--text-muted)">Username + password needed for the daily download quota (20/day free).</div>
+      </div>
+
+      <button class="btn" id="save-keys-btn">Save API Keys</button>
+      <div id="save-status" style="font-size:13px;color:var(--green);display:none">Saved — restart the server to apply changes.</div>
+    </div>
+
+    <div class="section-title">Ollama (Translation LLM)</div>
+    <div class="settings-grid" style="margin-bottom:40px">
+
+      <div class="setting-group">
+        <label>Ollama Host</label>
+        <input type="text" id="ollama-host" placeholder="http://localhost:11434" />
+      </div>
+
+      <div class="setting-group">
+        <label>Model <span style="color:var(--text-muted);font-weight:400">(recommended: qwen2.5:7b)</span></label>
+        <input type="text" id="ollama-model" placeholder="qwen2.5:7b" />
+      </div>
+
+      <button class="btn" id="save-ollama-btn">Save Ollama Settings</button>
+      <div id="save-ollama-status" style="font-size:13px;color:var(--green);display:none">Saved — restart the server to apply changes.</div>
+    </div>
+
+    <div class="section-title">Setup Guide</div>
+    <div style="color:var(--text-muted);font-size:13px;line-height:2;padding:16px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);max-width:520px">
+      <strong style="color:var(--text)">First-time setup</strong><br/>
+      1. Get a free SubDL key at <code>subdl.com</code><br/>
+      2. Get a free OpenSubtitles key at <code>opensubtitles.com/consumers</code><br/>
+      3. Install Ollama: <code>brew install ollama</code> <em>(macOS)</em><br/>
+      &nbsp;&nbsp;&nbsp;&nbsp;or download from <code>ollama.com</code> <em>(Windows/Linux)</em><br/>
+      4. Pull the translation model: <code>ollama pull qwen2.5:7b</code><br/>
+      5. Start Ollama in a separate terminal: <code>ollama serve</code><br/>
+      6. Enter your API keys above and click Save
+    </div>
+
+  </div>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
