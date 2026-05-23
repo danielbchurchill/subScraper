@@ -38,7 +38,7 @@ async function searchShow() {
   if (!input) return;
   state.imdbId = input.startsWith('tt') ? input : `tt${input}`;
 
-  setLoading('episode-area', 'Loading show info…');
+  setLoading('episode-grid', 'Loading show info…');
 
   try {
     const [titleRes, epsRes] = await Promise.all([
@@ -57,7 +57,7 @@ async function searchShow() {
     await loadStatuses();
     renderEpisodes();
   } catch (err) {
-    setError('episode-area', `Failed to load show: ${err.message}`);
+    setError('episode-grid', `Failed to load show: ${err.message}`);
   }
 }
 
