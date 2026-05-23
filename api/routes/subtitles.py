@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +12,8 @@ from api.models import EpisodeStatus, SubtitleStatus, TranslationJob
 from api.services import subdl as subdl_svc
 from api.services.opensubtitles import OpenSubtitlesClient
 from api.services import translation as trans_svc
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/subtitles", tags=["subtitles"])
 
@@ -109,14 +112,19 @@ async def _search_language(
     lang: str,
     lang_upper: str,
 ) -> Optional[object]:
+    log.info("Searching %s S%02dE%02d lang=%s subdl_key=%s os_key=%s",
+             series_imdb_id, season, episode, lang,
+             bool(settings.subdl_api_key), bool(settings.opensubtitles_api_key))
     tasks = [
         subdl_svc.search(settings, series_imdb_id, season, episode, language=lang_upper),
         _opensubtitles_search(settings, series_imdb_id, season, episode, lang),
     ]
     results_list = await asyncio.gather(*tasks, return_exceptions=True)
-    for results in results_list:
+    for source, results in zip(["subdl", "opensubtitles"], results_list):
         if isinstance(results, Exception):
+            log.warning("%s search error: %s", source, results)
             continue
+        log.info("%s returned %d results", source, len(results))
         if results:
             return results[0]
     return None
@@ -147,8 +155,9 @@ async def _download_result(settings, result, ep_dir: Path, filename: str) -> Opt
         if downloaded and downloaded.exists():
             downloaded.rename(dest)
             return dest
-    except Exception:
-        pass
+        log.warning("Download returned no file for %s", result)
+    except Exception as e:
+        log.warning("Download failed for %s: %s", result.source, e)
     return None
 
 
