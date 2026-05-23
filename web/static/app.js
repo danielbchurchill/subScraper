@@ -97,7 +97,7 @@ function renderShowHeader() {
 async function fetchAllSeason() {
   const eps = state.episodes.filter(e => e.season === state.activeSeason);
   for (const ep of eps) {
-    fetchSingle(ep.series_imdb_id, ep.season, ep.episode);
+    await fetchSingle(ep.series_imdb_id, ep.season, ep.episode);
   }
 }
 

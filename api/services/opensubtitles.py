@@ -9,6 +9,9 @@ from api.models import SubtitleResult
 
 _BASE = "https://api.opensubtitles.com/api/v1"
 
+# JWT cached for the lifetime of the server process — avoids re-login on every request
+_jwt_cache: dict = {"token": None, "base_url": _BASE}
+
 
 class OpenSubtitlesClient:
     def __init__(self, settings: Settings):
@@ -29,6 +32,10 @@ class OpenSubtitlesClient:
     async def login(self) -> None:
         if not self._settings.opensubtitles_username or not self._settings.opensubtitles_password:
             return
+        if _jwt_cache["token"]:
+            self._jwt = _jwt_cache["token"]
+            self._base_url = _jwt_cache["base_url"]
+            return
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
                 f"{_BASE}/login",
@@ -44,6 +51,8 @@ class OpenSubtitlesClient:
             base = data.get("base_url", "").strip("/")
             if base:
                 self._base_url = f"https://{base}/api/v1"
+            _jwt_cache["token"] = self._jwt
+            _jwt_cache["base_url"] = self._base_url
 
     async def search(
         self,
