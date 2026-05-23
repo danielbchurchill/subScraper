@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     opensubtitles_api_key: str = ""
     opensubtitles_username: str = ""
     opensubtitles_password: str = ""
+    jimaku_api_key: str = ""
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
     data_dir: Path = Path("./data")

@@ -21,6 +21,26 @@ async def get_series_title(imdb_id: str) -> str:
     return show.get("name", imdb_id)
 
 
+async def get_show_names(imdb_id: str) -> tuple[str, str]:
+    """Return (primary_name, original_language_name). Falls back to primary if no AKA found."""
+    show = await _lookup_show(imdb_id)
+    primary = show.get("name", imdb_id)
+    show_id = show.get("id")
+    if not show_id:
+        return primary, ""
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            r = await client.get(f"{TVMAZE}/shows/{show_id}/akas")
+            if r.status_code == 200:
+                for aka in r.json():
+                    country = aka.get("country") or {}
+                    if country.get("code") == "JP":
+                        return primary, aka.get("name", "")
+    except Exception:
+        pass
+    return primary, ""
+
+
 async def get_episodes(imdb_id: str, season: Optional[int] = None) -> list[Episode]:
     norm = imdb_id if imdb_id.startswith("tt") else f"tt{imdb_id}"
     show = await _lookup_show(imdb_id)

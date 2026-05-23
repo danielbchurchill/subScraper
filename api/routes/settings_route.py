@@ -15,6 +15,7 @@ class SettingsPayload(BaseModel):
     opensubtitles_api_key: Optional[str] = None
     opensubtitles_username: Optional[str] = None
     opensubtitles_password: Optional[str] = None
+    jimaku_api_key: Optional[str] = None
     ollama_host: Optional[str] = None
     ollama_model: Optional[str] = None
 
@@ -30,6 +31,8 @@ async def get_settings_view(settings: Settings = Depends(get_settings)):
         "opensubtitles_api_key": _mask(env.get("OPENSUBTITLES_API_KEY", "")),
         "opensubtitles_username": env.get("OPENSUBTITLES_USERNAME", ""),
         "opensubtitles_configured": bool(settings.opensubtitles_api_key),
+        "jimaku_api_key": _mask(env.get("JIMAKU_API_KEY", "")),
+        "jimaku_configured": bool(settings.jimaku_api_key),
     }
 
 
@@ -45,6 +48,8 @@ async def save_settings(payload: SettingsPayload):
         updates["OPENSUBTITLES_USERNAME"] = payload.opensubtitles_username
     if payload.opensubtitles_password is not None:
         updates["OPENSUBTITLES_PASSWORD"] = payload.opensubtitles_password
+    if payload.jimaku_api_key is not None:
+        updates["JIMAKU_API_KEY"] = payload.jimaku_api_key
     if payload.ollama_host is not None:
         updates["OLLAMA_HOST"] = payload.ollama_host
     if payload.ollama_model is not None:

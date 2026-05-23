@@ -46,8 +46,11 @@ def _detect_language(name: str) -> str:
     return "ja"  # Jimaku is primarily a Japanese drama site
 
 
-async def search(series_title: str, season: int, episode: int, language: Optional[str] = None) -> list[SubtitleResult]:
-    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+async def search(api_key: str, series_title: str, season: int, episode: int, language: Optional[str] = None) -> list[SubtitleResult]:
+    if not api_key:
+        return []
+    headers = {"Authorization": f"Bearer {api_key}"}
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=headers) as client:
         r = await client.get(f"{BASE}/entries/search", params={"q": series_title})
         if r.status_code != 200:
             log.warning("Jimaku search returned %d for %r", r.status_code, series_title)
@@ -63,7 +66,7 @@ async def search(series_title: str, season: int, episode: int, language: Optiona
         entry_id = entry.get("id")
         if not entry_id:
             continue
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=headers) as client:
             r = await client.get(f"{BASE}/entries/{entry_id}/files")
             if r.status_code != 200:
                 continue
@@ -91,9 +94,10 @@ async def search(series_title: str, season: int, episode: int, language: Optiona
     return results
 
 
-async def download(result: SubtitleResult, dest_dir: Path) -> Optional[Path]:
+async def download(api_key: str, result: SubtitleResult, dest_dir: Path) -> Optional[Path]:
     dest_dir.mkdir(parents=True, exist_ok=True)
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as client:
         r = await client.get(result.download_url)
         r.raise_for_status()
     out = dest_dir / result.name

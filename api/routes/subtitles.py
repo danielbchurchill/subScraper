@@ -80,9 +80,9 @@ async def fetch_subtitles(
 
     # Fetch show title once — needed by Jimaku and Kitsunekko
     try:
-        series_title = await imdb_svc.get_series_title(series_imdb_id)
+        series_title, alt_title = await imdb_svc.get_show_names(series_imdb_id)
     except Exception:
-        series_title = ""
+        series_title, alt_title = "", ""
 
     # Login to OpenSubtitles once for this request
     os_client = OpenSubtitlesClient(settings)
@@ -93,7 +93,7 @@ async def fetch_subtitles(
             log.warning("OpenSubtitles login failed: %s", e)
 
     # Try English first
-    en_result = await _search_language(settings, os_client, series_imdb_id, series_title, season, episode, "en", "EN")
+    en_result = await _search_language(settings, os_client, series_imdb_id, series_title, alt_title, season, episode, "en", "EN")
     if en_result:
         srt = await _download_result(settings, os_client, en_result, ep_dir, "english.srt")
         if srt:
@@ -101,7 +101,7 @@ async def fetch_subtitles(
 
     # Try non-English fallbacks, queue for translation
     for lang_code, lang_code2 in [("ja", "JA"), ("zh", "ZH"), ("ko", "KO"), ("fr", "FR"), ("es", "ES")]:
-        result = await _search_language(settings, os_client, series_imdb_id, series_title, season, episode, lang_code, lang_code2)
+        result = await _search_language(settings, os_client, series_imdb_id, series_title, alt_title, season, episode, lang_code, lang_code2)
         if result:
             ext = Path(result.name).suffix.lower() or ".srt"
             source_filename = f"source_{lang_code}{ext}"
@@ -128,6 +128,7 @@ async def _search_language(
     os_client: OpenSubtitlesClient,
     series_imdb_id: str,
     series_title: str,
+    alt_title: str,
     season: int,
     episode: int,
     lang: str,
@@ -138,11 +139,11 @@ async def _search_language(
     tasks = [
         subdl_svc.search(settings, series_imdb_id, season, episode, language=lang_upper),
         os_client.search(series_imdb_id, season, episode, language=lang),
-        jimaku_svc.search(series_title, season, episode, language=lang),
+        jimaku_svc.search(settings.jimaku_api_key, series_title, season, episode, language=lang),
     ]
     if lang == "ja":
         sources.append("kitsunekko")
-        tasks.append(kitsunekko_svc.search(series_title, season, episode))
+        tasks.append(kitsunekko_svc.search(series_title, season, episode, alt_title=alt_title))
 
     results_list = await asyncio.gather(*tasks, return_exceptions=True)
     for source, results in zip(sources, results_list):
@@ -163,7 +164,7 @@ async def _download_result(settings, os_client: OpenSubtitlesClient, result, ep_
         if result.source == "subdl":
             downloaded = await subdl_svc.download(settings, result, ep_dir)
         elif result.source == "jimaku":
-            downloaded = await jimaku_svc.download(result, ep_dir)
+            downloaded = await jimaku_svc.download(settings.jimaku_api_key, result, ep_dir)
         elif result.source == "kitsunekko":
             downloaded = await kitsunekko_svc.download(result, ep_dir)
         else:

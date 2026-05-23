@@ -267,6 +267,11 @@ function renderSettings() {
     b.className = 'badge badge-english';
     b.textContent = s.opensubtitles_api_key || 'Set';
   }
+  if (s.jimaku_configured) {
+    const b = document.getElementById('jimaku-badge');
+    b.className = 'badge badge-english';
+    b.textContent = s.jimaku_api_key || 'Set';
+  }
 
   // Username
   if (s.opensubtitles_username) {
@@ -280,11 +285,13 @@ document.getElementById('save-keys-btn').addEventListener('click', async () => {
   const osKey = document.getElementById('os-key').value.trim();
   const osUser = document.getElementById('os-username').value.trim();
   const osPass = document.getElementById('os-password').value.trim();
+  const jimaku = document.getElementById('jimaku-key').value.trim();
 
   if (subdl) payload.subdl_api_key = subdl;
   if (osKey) payload.opensubtitles_api_key = osKey;
   if (osUser) payload.opensubtitles_username = osUser;
   if (osPass) payload.opensubtitles_password = osPass;
+  if (jimaku) payload.jimaku_api_key = jimaku;
 
   if (!Object.keys(payload).length) return;
 
@@ -297,6 +304,7 @@ document.getElementById('save-keys-btn').addEventListener('click', async () => {
     document.getElementById('subdl-key').value = '';
     document.getElementById('os-key').value = '';
     document.getElementById('os-password').value = '';
+    document.getElementById('jimaku-key').value = '';
     await loadSettings();
   } catch (err) {
     alert('Failed to save: ' + err.message);
