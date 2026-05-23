@@ -1,7 +1,13 @@
 from __future__ import annotations
 import asyncio
+import importlib.util
+import pkgutil
 from functools import lru_cache
 from typing import Optional
+
+# cinemagoer uses pkgutil.find_loader which was removed in Python 3.14
+if not hasattr(pkgutil, "find_loader"):
+    pkgutil.find_loader = lambda name, path=None: importlib.util.find_spec(name)
 
 from api.models import Episode
 
