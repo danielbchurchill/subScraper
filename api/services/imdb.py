@@ -32,10 +32,17 @@ async def get_show_names(imdb_id: str) -> tuple[str, str]:
         async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
             r = await client.get(f"{TVMAZE}/shows/{show_id}/akas")
             if r.status_code == 200:
-                for aka in r.json():
+                akas = r.json()
+                first_no_country = None
+                for aka in akas:
                     country = aka.get("country") or {}
+                    name = aka.get("name", "")
                     if country.get("code") == "JP":
-                        return primary, aka.get("name", "")
+                        return primary, name
+                    if not country and name and name != primary and first_no_country is None:
+                        first_no_country = name
+                if first_no_country:
+                    return primary, first_no_country
     except Exception:
         pass
     return primary, ""

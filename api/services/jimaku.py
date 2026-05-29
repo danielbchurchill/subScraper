@@ -1,6 +1,8 @@
 from __future__ import annotations
+import asyncio
 import re
 import logging
+import unicodedata
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +14,21 @@ BASE = "https://jimaku.cc/api"
 _EXT_RE = re.compile(r'\.(srt|ass|ssa|vtt)$', re.IGNORECASE)
 
 log = logging.getLogger(__name__)
+
+
+_LONG_VOWEL_MARKS = {'̂', '̄'}  # combining circumflex U+0302, combining macron U+0304
+
+
+def _expand_long_vowels(s: str) -> str:
+    """Convert circumflex/macron long-vowel markers to doubled vowels: ryûgi → ryuugi."""
+    out = []
+    for ch in unicodedata.normalize('NFD', s):
+        if ch in _LONG_VOWEL_MARKS:
+            if out and out[-1].lower() in 'aeiou':
+                out.append(out[-1])
+        else:
+            out.append(ch)
+    return ''.join(out)
 
 
 def _detect_format(name: str) -> str:
@@ -46,28 +63,34 @@ def _detect_language(name: str) -> str:
     return "ja"  # Jimaku is primarily a Japanese drama site
 
 
-async def search(api_key: str, series_title: str, season: int, episode: int, language: Optional[str] = None) -> list[SubtitleResult]:
-    if not api_key:
-        return []
-    headers = {"Authorization": f"Bearer {api_key}"}
+async def _search_by_title(headers: dict, title: str, season: int, episode: int, language: Optional[str]) -> list[SubtitleResult]:
     async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=headers) as client:
-        r = await client.get(f"{BASE}/entries/search", params={"q": series_title})
-        if r.status_code != 200:
-            log.warning("Jimaku search returned %d for %r", r.status_code, series_title)
-            return []
-        entries = r.json()
+        anime_r, live_r = await asyncio.gather(
+            client.get(f"{BASE}/entries/search", params={"query": title, "anime": "true"}),
+            client.get(f"{BASE}/entries/search", params={"query": title, "anime": "false"}),
+        )
+    if anime_r.status_code != 200 and live_r.status_code != 200:
+        log.warning("Jimaku search returned %d/%d for %r", anime_r.status_code, live_r.status_code, title)
+        return []
+    seen: set[int] = set()
+    entries = []
+    for r in (anime_r, live_r):
+        if r.status_code == 200:
+            for e in r.json():
+                if e.get("id") not in seen:
+                    seen.add(e["id"])
+                    entries.append(e)
 
     if not entries:
         return []
 
     results: list[SubtitleResult] = []
-    # Try top 5 matching entries to cover multi-season shows
     for entry in entries[:5]:
         entry_id = entry.get("id")
         if not entry_id:
             continue
         async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers=headers) as client:
-            r = await client.get(f"{BASE}/entries/{entry_id}/files")
+            r = await client.get(f"{BASE}/entries/{entry_id}/files", params={"episode": episode})
             if r.status_code != 200:
                 continue
             files = r.json()
@@ -76,8 +99,6 @@ async def search(api_key: str, series_title: str, season: int, episode: int, lan
             name = f.get("name", "")
             url = f.get("url", "")
             if not url or not _EXT_RE.search(name):
-                continue
-            if not _matches_episode(name, season, episode):
                 continue
             lang = _detect_language(name)
             if language and lang != language:
@@ -91,6 +112,22 @@ async def search(api_key: str, series_title: str, season: int, episode: int, lan
                 download_url=url,
             ))
 
+    return results
+
+
+async def search(api_key: str, series_title: str, season: int, episode: int, language: Optional[str] = None, alt_title: Optional[str] = None) -> list[SubtitleResult]:
+    if not api_key:
+        return []
+    headers = {"Authorization": api_key}
+    results = await _search_by_title(headers, series_title, season, episode, language)
+    if not results and alt_title and alt_title != series_title:
+        log.info("Jimaku: retrying with alt title %r", alt_title)
+        results = await _search_by_title(headers, alt_title, season, episode, language)
+    if not results and alt_title:
+        expanded = _expand_long_vowels(alt_title)
+        if expanded != alt_title:
+            log.info("Jimaku: retrying with expanded title %r", expanded)
+            results = await _search_by_title(headers, expanded, season, episode, language)
     return results
 
 

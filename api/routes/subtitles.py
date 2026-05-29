@@ -139,7 +139,7 @@ async def _search_language(
     tasks = [
         subdl_svc.search(settings, series_imdb_id, season, episode, language=lang_upper),
         os_client.search(series_imdb_id, season, episode, language=lang),
-        jimaku_svc.search(settings.jimaku_api_key, series_title, season, episode, language=lang),
+        jimaku_svc.search(settings.jimaku_api_key, series_title, season, episode, language=lang, alt_title=alt_title),
     ]
     if lang == "ja":
         sources.append("kitsunekko")
